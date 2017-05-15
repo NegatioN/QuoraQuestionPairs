@@ -3,6 +3,7 @@ import gensim
 from nltk.tokenize import word_tokenize
 import numpy as np
 import pandas as pd
+import pdb
 
 
 def tokenize_a_doc(s):
@@ -28,23 +29,24 @@ def vectorize_string(wordlist, wdic):
 
 
 class Preprocess_text:
-    def __init__(self, text_dataframe, columns=["text"], save_name="textdata", save_path=None, word2vec_path=None, word_dim=50, w2v_workers=3):
+    def __init__(self, text_dataframe=None, columns=["text"], save_name="textdata", save_path=None, word2vec_path=None, word_dim=50, w2v_workers=3):
         # Download nltk data if it doesnt exist
         nltk.download('punkt')
         self.df = pd.DataFrame(text_dataframe, columns=columns)
+        self.columns = columns
 
         if save_path:
             w2v = np.load(save_path)
             vectors = w2v['vectors']
             words = w2v['words']
         else:
-            total_sentences = [sentence for l in pd.DataFrame(text_dataframe, columns=columns).values for sentence in l]
-            gensimmodel, words = self.load_gensim(total_sentences, word_dim, word2vec_path, w2v_workers)
-            vectors = self.generate_new_embedding_vectors(word_dim, gensimmodel)
+            gensimmodel, words = self.load_gensim(text_dataframe, columns, word_dim, word2vec_path, w2v_workers)
+            self.idx2vector = {idx: gensimmodel.word_vec(word) for idx, word in enumerate(words)}
+            #vectors = self.generate_new_embedding_vectors(word_dim, gensimmodel)
 
         self.word2index = self.words_to_indexes(words)
         self.index2word = self.index_to_words(words)
-        self.idx2vector = self.index_to_vector(vectors)
+        #self.idx2vector = self.index_to_vector(vectors)
         #np.savez("word2vec" + save_name + ".npz", vectors=self.vectors, words=self.words)
 
 
@@ -63,10 +65,12 @@ class Preprocess_text:
         return {i: vector for i, vector in enumerate(vectors)}
 
     def vectorize_data(self):
+        vectorized_data = []
         for column in self.columns:
-            print("Tokenizing %s".format(column))
-            self.tokenized_data.append([tokenize_a_doc(sent) for sent in self.df[column]])
-            self.df['vectorized'] = self.df.tokenized.map(lambda x: vectorize_string(x, self.word2index))
+            print("Tokenizing {}".format(column))
+            vectorized_data.append([vectorize_string(tokenize_a_doc(sent), self.word2index) for sent in self.df[column]])
+        return vectorized_data
+            #return tokenized_data.map(lambda x: vectorize_string(x, self.word2index))
 
     @staticmethod
     def generate_new_embedding_vectors(word_dim, gensimmodel):
@@ -74,21 +78,18 @@ class Preprocess_text:
         vecs = np.vstack(map(lambda w: gensimmodel[w], gensimmodel.wv.vocab.keys()))
         return np.vstack([vecs0, vecs])
 
-    def load_gensim(self, sentences, word_dim, word2vec_path, w2v_workers=3):
+    def load_gensim(self, text_dataframe, columns, word_dim, word2vec_path, w2v_workers=3):
         # Build word2vec model
         if word2vec_path:
             gensimmodel =  gensim.models.KeyedVectors.load_word2vec_format(word2vec_path, binary=True)
         else:
-            gensimmodel = gensim.models.word2vec.Word2Vec(sentences, size=word_dim, window=5, min_count=5, workers=w2v_workers)
+            total_sentences = [sentence for l in pd.DataFrame(text_dataframe, columns=columns).values for sentence in l]
+            gensimmodel = gensim.models.word2vec.Word2Vec(total_sentences, size=word_dim, window=5, min_count=5, workers=w2v_workers)
         print('w2v model generated.')
         # Go from gensim to numpy arrays.
         # Add first index to be zero index for missing words.
-        words = ["UNK"]
-        words.extend(gensimmodel.wv.vocab.keys())
-        return gensimmodel, words
 
-    def vectorize_text(self, ):
-        words = self.words
-        wdic = {word: i for i, word in enumerate(words)}
-        self.df['vectorized'] = self.df.tokenized.map(lambda x: vectorize_string(x, wdic))
+        words = ["UNK"]
+        words.extend(gensimmodel.vocab.keys())
+        return gensimmodel, words
 
