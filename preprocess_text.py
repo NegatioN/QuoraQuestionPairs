@@ -41,9 +41,11 @@ class Preprocess_text:
             words = w2v['words']
         else:
             gensimmodel, words = self.load_gensim(text_dataframe, columns, word_dim, word2vec_path, w2v_workers)
-            self.idx2vector = {idx: gensimmodel.word_vec(word) for idx, word in enumerate(words)}
+            vectors = self.generate_new_embedding_vectors(300, gensimmodel)
+            #self.idx2vector = {idx: gensimmodel.word_vec(word) for idx, word in enumerate(words)}
             #vectors = self.generate_new_embedding_vectors(word_dim, gensimmodel)
-
+        self.words = words
+        self.vectors = vectors
         self.word2index = self.words_to_indexes(words)
         self.index2word = self.index_to_words(words)
         #self.idx2vector = self.index_to_vector(vectors)
@@ -70,13 +72,12 @@ class Preprocess_text:
             print("Tokenizing {}".format(column))
             vectorized_data.append([vectorize_string(tokenize_a_doc(sent), self.word2index) for sent in self.df[column]])
         return vectorized_data
-            #return tokenized_data.map(lambda x: vectorize_string(x, self.word2index))
 
     @staticmethod
     def generate_new_embedding_vectors(word_dim, gensimmodel):
-        vecs0 = np.repeat(0, word_dim)
-        vecs = np.vstack(map(lambda w: gensimmodel[w], gensimmodel.wv.vocab.keys()))
-        return np.vstack([vecs0, vecs])
+        unknown_vec = np.repeat(0, word_dim)
+        vecs = np.vstack(map(lambda w: gensimmodel[w], gensimmodel.vocab.keys()))
+        return np.vstack([unknown_vec, vecs])
 
     def load_gensim(self, text_dataframe, columns, word_dim, word2vec_path, w2v_workers=3):
         # Build word2vec model
