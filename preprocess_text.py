@@ -3,7 +3,6 @@ import gensim
 from nltk.tokenize import word_tokenize
 import numpy as np
 import pandas as pd
-import pdb
 
 
 def tokenize_a_doc(s):
@@ -14,7 +13,7 @@ def tokenize_a_doc(s):
     return tok
 
 
-def vectorize_string(wordlist, wdic):
+def tokenize_string(wordlist, wdic):
     return [wdic.get(word) if wdic.get(word) is not None else 0 for word in wordlist]
 
 
@@ -66,12 +65,12 @@ class Preprocess_text:
     def index_to_vector(vectors):
         return {i: vector for i, vector in enumerate(vectors)}
 
-    def vectorize_data(self):
-        vectorized_data = []
+    def tokenize_data(self):
+        tokenized_data = []
         for column in self.columns:
             print("Tokenizing {}".format(column))
-            vectorized_data.append([vectorize_string(tokenize_a_doc(sent), self.word2index) for sent in self.df[column]])
-        return vectorized_data
+            tokenized_data.append([tokenize_string(tokenize_a_doc(sent), self.word2index) for sent in self.df[column]])
+        return tokenized_data
 
     @staticmethod
     def generate_new_embedding_vectors(word_dim, gensimmodel):
