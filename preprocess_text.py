@@ -57,8 +57,8 @@ class Preprocess_text:
         nltk.download('punkt')
         self.df = pd.DataFrame(text_dataframe, columns=columns)
 
-        self.gensimmodel = self.generate_embeddings(text_dataframe, columns, word_dim, w2v_workers) \
-            if text_dataframe is not None else self.load_embeddings(word2vec_path)
+        self.gensimmodel = generate_embeddings(text_dataframe, columns, word_dim, w2v_workers) \
+            if text_dataframe is not None else load_embeddings(word2vec_path)
         # Add a vector that encodes every word we don't find in the corpus.
         words = ["UNK"]
         words.extend(self.gensimmodel.vocab.keys())
@@ -67,7 +67,7 @@ class Preprocess_text:
             vectors = w2v['vectors']
             words = w2v['words']
         else:
-            vectors = self.get_model_vectors(word_dim, self.gensimmodel)
+            vectors = get_model_vectors(word_dim, self.gensimmodel)
 
         self.words = words
         self.vectors = vectors
