@@ -17,6 +17,30 @@ def tokenize_string(wordlist, wdic):
     return [wdic.get(word) if wdic.get(word) is not None else 0 for word in wordlist]
 
 
+def index_to_vector(vectors):
+    return {i: vector for i, vector in enumerate(vectors)}
+
+
+def words_to_indexes(words):
+    return {word: i for i, word in enumerate(words)}
+
+
+def index_to_words(words):
+    return {i: word for i, word in enumerate(words)}
+
+
+def generate_embeddings(text_dataframe, columns, word_dim, w2v_workers=3):
+    total_sentences = [sentence for l in pd.DataFrame(text_dataframe, columns=columns).values for sentence in l]
+    return gensim.models.word2vec.Word2Vec(total_sentences, size=word_dim, window=5, min_count=5, workers=w2v_workers)
+
+def get_model_vectors(word_dim, gensimmodel):
+    unknown_vec = np.repeat(0, word_dim)
+    vecs = np.vstack(map(lambda w: gensimmodel[w], gensimmodel.vocab.keys()))
+    return np.vstack([unknown_vec, vecs])
+
+def load_embeddings(word2vec_path):
+    return gensim.models.KeyedVectors.load_word2vec_format(word2vec_path, binary=True)
+
 '''
 # Arguments
     x: numpy array of text data that wants to be modelled
@@ -28,68 +52,34 @@ def tokenize_string(wordlist, wdic):
 
 
 class Preprocess_text:
-    def __init__(self, text_dataframe=None, columns=["text"], save_name="textdata", save_path=None, word2vec_path=None, word_dim=50, w2v_workers=3):
+    def __init__(self, text_dataframe=None, columns=["text"], save_path=None, word2vec_path=None, word_dim=300, w2v_workers=3):
         # Download nltk data if it doesnt exist
         nltk.download('punkt')
         self.df = pd.DataFrame(text_dataframe, columns=columns)
-        self.columns = columns
 
+        self.gensimmodel = self.generate_embeddings(text_dataframe, columns, word_dim, w2v_workers) \
+            if text_dataframe is not None else self.load_embeddings(word2vec_path)
+        # Add a vector that encodes every word we don't find in the corpus.
+        words = ["UNK"]
+        words.extend(self.gensimmodel.vocab.keys())
         if save_path:
             w2v = np.load(save_path)
             vectors = w2v['vectors']
             words = w2v['words']
         else:
-            gensimmodel, words = self.load_gensim(text_dataframe, columns, word_dim, word2vec_path, w2v_workers)
-            vectors = self.generate_new_embedding_vectors(300, gensimmodel)
-            #self.idx2vector = {idx: gensimmodel.word_vec(word) for idx, word in enumerate(words)}
-            #vectors = self.generate_new_embedding_vectors(word_dim, gensimmodel)
+            vectors = self.get_model_vectors(word_dim, self.gensimmodel)
+
         self.words = words
         self.vectors = vectors
-        self.word2index = self.words_to_indexes(words)
-        self.index2word = self.index_to_words(words)
-        #self.idx2vector = self.index_to_vector(vectors)
-        #np.savez("word2vec" + save_name + ".npz", vectors=self.vectors, words=self.words)
+        self.word2index = words_to_indexes(words)
+        self.index2word = index_to_words(words)
+        self.idx2vector = index_to_vector(vectors)
 
+    def find_word_vector(self, word):
+        return self.idx2vector[self.word2index[word]]
 
-        # for input column, do tokenize and keep in separate index of tokenized_row?
+    def save_embeddings(self, save_name, save_path="./"):
+        np.savez(save_path + "word2vec" + save_name + ".npz", vectors=self.vectors, words=self.words)
 
-    @staticmethod
-    def words_to_indexes(words):
-        return {word: i for i, word in enumerate(words)}
-
-    @staticmethod
-    def index_to_words(words):
-        return {i: word for i, word in enumerate(words)}
-
-    @staticmethod
-    def index_to_vector(vectors):
-        return {i: vector for i, vector in enumerate(vectors)}
-
-    def tokenize_data(self):
-        tokenized_data = []
-        for column in self.columns:
-            print("Tokenizing {}".format(column))
-            tokenized_data.append([tokenize_string(tokenize_a_doc(sent), self.word2index) for sent in self.df[column]])
-        return tokenized_data
-
-    @staticmethod
-    def generate_new_embedding_vectors(word_dim, gensimmodel):
-        unknown_vec = np.repeat(0, word_dim)
-        vecs = np.vstack(map(lambda w: gensimmodel[w], gensimmodel.vocab.keys()))
-        return np.vstack([unknown_vec, vecs])
-
-    def load_gensim(self, text_dataframe, columns, word_dim, word2vec_path, w2v_workers=3):
-        # Build word2vec model
-        if word2vec_path:
-            gensimmodel =  gensim.models.KeyedVectors.load_word2vec_format(word2vec_path, binary=True)
-        else:
-            total_sentences = [sentence for l in pd.DataFrame(text_dataframe, columns=columns).values for sentence in l]
-            gensimmodel = gensim.models.word2vec.Word2Vec(total_sentences, size=word_dim, window=5, min_count=5, workers=w2v_workers)
-        print('w2v model generated.')
-        # Go from gensim to numpy arrays.
-        # Add first index to be zero index for missing words.
-
-        words = ["UNK"]
-        words.extend(gensimmodel.vocab.keys())
-        return gensimmodel, words
-
+    def tokenize_data(self, sentence_array):
+        return [tokenize_string(tokenize_a_doc(sent), self.word2index) for sent in sentence_array]
