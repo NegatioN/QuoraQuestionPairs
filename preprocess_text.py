@@ -3,11 +3,39 @@ import gensim
 from nltk.tokenize import word_tokenize
 import numpy as np
 import pandas as pd
+import sys, string
 
+
+if sys.version_info < (3,):
+    maketrans = string.maketrans
+else:
+    maketrans = str.maketrans
+
+numerals = ['0','1','2','3','4','5','6','7','8','9']
+numeral_sub_table = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+nums_zip = zip(numerals, numeral_sub_table)
+#num_trans = maketrans(numerals, numeral_sub_table)
+
+
+def replace_numerals(s):
+    for i, num_string in nums_zip:
+        s = s.replace(i, num_string)
+    return s
+
+
+def text_to_word_sequence(text,
+                          filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n',
+                          lower=True, split=" "):
+    if lower:
+        text = text.lower()
+    text = replace_numerals(text)
+    text = text.translate(maketrans(filters, split * len(filters)))
+    seq = text.split(split)
+    return [i for i in seq if i]
 
 def tokenize_a_doc(s):
     try:
-        tok = word_tokenize(' '.join(s.split(" ")).lower())
+        tok = word_tokenize(' '.join(text_to_word_sequence(s)))
     except:
         tok = ""
     return tok
@@ -75,8 +103,8 @@ class Preprocess_text:
         self.index2word = index_to_words(words)
         self.idx2vector = index_to_vector(vectors)
 
-    def find_word_vector(self, word):
-        return self.idx2vector[self.word2index[word]]
+    def find_word_vector(self, word_index):
+        return self.idx2vector[word_index]
 
     def save_embeddings(self, save_name, save_path="./"):
         np.savez(save_path + "word2vec" + save_name + ".npz", vectors=self.vectors, words=self.words)
