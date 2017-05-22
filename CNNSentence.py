@@ -34,13 +34,14 @@ def KernelBlock(x, max_doc_length, kernel_name, kernel_size_start=3, num_kernels
     https://arxiv.org/pdf/1408.5882.pdf
 """
 class CNNSentence:
-    def __init__(self, max_doc_length, num_inputs, output_name_size={}, kernel_size_start=2, regularization="batch_norm",
+    def __init__(self, max_doc_length, num_inputs, output_name_size={}, final_activation="softmax", kernel_size_start=2, regularization="batch_norm",
                  embedding_length=300, num_features=500, dropout=0.3):
         self.output_name_size = output_name_size
         self.regularization = regularization
         self.dropout = dropout
         self.output_layers = []
         self.input_layers = []
+        self.final_activation = final_activation
         self.model = self.create_model(num_inputs, max_doc_length, embedding_length, kernel_size_start, num_features)
 
     def create_model(self, num_inputs, max_doc_length, embedding_length, kernel_size_start, num_features):
@@ -56,7 +57,7 @@ class CNNSentence:
         else:
             x = Dropout(self.dropout)(feature_layer)
         for name, out_size in self.output_name_size.items():
-            self.output_layers.append(Dense(out_size, name=name, activation="softmax")(x))
+            self.output_layers.append(Dense(out_size, name=name, activation=self.final_activation)(x))
         return Model(self.input_layers, self.output_layers)
 
 def get_padded_input(values, max_doc_length=15):

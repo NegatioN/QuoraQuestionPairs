@@ -8,16 +8,17 @@ from keras.layers import Input, concatenate, LSTM, Bidirectional, RepeatVector
 from keras.layers.merge import Concatenate
 from keras.layers.core import *
 from keras.layers.normalization import BatchNormalization
+import numpy as np
 
 
-def RNNEncoder(x, dim=200):
-    x = Bidirectional(LSTM(dim, dropout_U=0.1, dropout_W=0.1, consume_less="gpu", return_sequences=True))(x)
-    return LSTM(dim, dropout_U=0.1, dropout_W=0.1, consume_less="gpu", return_sequences=False)(x)
+def RNNEncoder(x, dim=250, rate_drop_lstm=0.0):
+    x = Bidirectional(LSTM(dim, implementation=2, dropout=rate_drop_lstm, recurrent_dropout=rate_drop_lstm, return_sequences=True))(x)
+    return LSTM(dim, implementation=2, dropout=rate_drop_lstm, recurrent_dropout=rate_drop_lstm, return_sequences=False)(x)
 
-def RNNDecoder(x, max_doc_length, dim=200):
+def RNNDecoder(x, max_doc_length, dim=250, rate_drop_lstm=0.0):
     x = RepeatVector(max_doc_length)(x)
-    x = LSTM(dim, dropout_U=0.1, dropout_W=0.1, consume_less="gpu", return_sequences=True)(x)
-    return LSTM(dim, dropout_U=0.1, dropout_W=0.1, consume_less="gpu", return_sequences=True)(x)
+    x = LSTM(dim, implementation=2, dropout=rate_drop_lstm, recurrent_dropout=rate_drop_lstm, return_sequences=True)(x)
+    return LSTM(dim, implementation=2, dropout=rate_drop_lstm, recurrent_dropout=rate_drop_lstm, return_sequences=True)(x)
 
 
 """
@@ -33,11 +34,13 @@ def RNNDecoder(x, max_doc_length, dim=200):
     https://arxiv.org/pdf/1408.5882.pdf
 """
 class RNNSentence:
-    def __init__(self, max_doc_length, num_inputs, output_name_size={}, regularization="batch_norm",
-                 embedding_length=300, num_features=500, dropout=0.3):
+    def __init__(self, max_doc_length, num_inputs, output_name_size={}, final_activation="softmax", regularization="batch_norm",
+                 embedding_length=300, num_features=500, rate_drop_lstm=0.15 + np.random.rand() * 0.25, rate_drop_dense=0.2):
         self.output_name_size = output_name_size
         self.regularization = regularization
-        self.dropout = dropout
+        self.dropout = rate_drop_dense
+        self.rate_drop_lstm = rate_drop_lstm
+        self.final_activation = final_activation
         self.output_layers = []
         self.input_layers = []
         self.model = self.create_model(num_inputs, max_doc_length, embedding_length, num_features)
@@ -45,10 +48,13 @@ class RNNSentence:
     def create_model(self, num_inputs, max_doc_length, embedding_length, num_features):
         self.input_layers = [Input(shape=(max_doc_length, embedding_length, )) for i in range(num_inputs)]
         merged_inputs = Concatenate()(self.input_layers)
+        decoders = []
 
-
-        encoder = RNNEncoder(merged_inputs)
-        decoder = RNNDecoder(encoder, max_doc_length)
+        #for inp in self.input_layers:
+        encoder = RNNEncoder(merged_inputs, rate_drop_lstm=self.rate_drop_lstm)
+        decoder = RNNDecoder(encoder, max_doc_length, rate_drop_lstm=self.rate_drop_lstm)
+        #    decoders.append(decoder)
+        #merged_states = Concatenate()(decoders)
 
         x = Flatten()(decoder)
         feature_layer = Dense(num_features, activation="relu", name="feature_layer")(x)
@@ -57,7 +63,7 @@ class RNNSentence:
         else:
             x = Dropout(self.dropout)(feature_layer)
         for name, out_size in self.output_name_size.items():
-            self.output_layers.append(Dense(out_size, name=name, activation="softmax")(x))
+            self.output_layers.append(Dense(out_size, name=name, activation=self.final_activation)(x))
         return Model(self.input_layers, self.output_layers)
 
 def get_padded_input(values, max_doc_length=15):
